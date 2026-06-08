@@ -34,7 +34,7 @@ class TTSEngine:
             # 根据官方指南加载最新的 VoxCPM2 模型
             self.model = VoxCPM.from_pretrained(
                 "openbmb/VoxCPM2",
-                load_denoiser=False,  # 如果你不需要音色克隆高级增强，False 能省显存
+                load_denoiser=True,  # 如果你不需要音色克隆高级增强，False 能省显存
                 device=self.device
             )
             logger.info("✅ 真实大模型加载成功！")
@@ -42,7 +42,8 @@ class TTSEngine:
             logger.error(f"模型加载致命失败: {e}")
             raise
 
-    def generate_audio(self, text: str, output_path: str) -> bool:
+    # 增加 prompt_audio_path，并设置默认值为 None
+    def generate_audio(self, text: str, output_path: str, prompt_audio_path: str = None) -> bool:
         logger.info(f"收到合成请求，文本长度: {len(text)} 字")
 
         if self.use_mock:
@@ -53,15 +54,22 @@ class TTSEngine:
         try:
             logger.info("🧠 GPU 正在全速推理中...")
 
-            # 【核心：官方标准推理 API】
-            # wav 是一个 numpy 数组，包含了连续的音频波形数据
-            wav = self.model.generate(
-                text=text,
-                cfg_value=2.0,  # 分类器引导强度，控制发音清晰度
-                inference_timesteps=10,  # 扩散模型的采样步数 (步数越低速度越快，默认 10)
-            )
+            # 构建基础的生成参数
+            generate_kwargs = {
+                "text": text,
+                "cfg_value": 2.0,
+                "inference_timesteps": 10,
+            }
 
-            # 使用 soundfile 将波形数组保存为真实的 .wav 文件
+            # 修改：如果传入了参考音频，就把它加进大模型的提示词参数里
+            if prompt_audio_path and os.path.exists(prompt_audio_path):
+                logger.info(f"🎤 启用音色克隆，参考音频路径: {prompt_audio_path}")
+                generate_kwargs["reference_wav_path"] = prompt_audio_path
+
+            # 使用解包的方式传入参数
+            wav = self.model.generate(**generate_kwargs)
+
+            import soundfile as sf
             sf.write(output_path, wav, self.model.tts_model.sample_rate)
 
             logger.info(f"✅ 真实音频生成成功，已保存至: {output_path}")
@@ -70,7 +78,6 @@ class TTSEngine:
         except Exception as e:
             logger.error(f"❌ 显存溢出或生成报错: {e}")
             return False
-
 
 # 关键：将 use_mock 设为 False 即可激活真实模型！
 tts_engine = TTSEngine(use_mock=False, device="cuda")

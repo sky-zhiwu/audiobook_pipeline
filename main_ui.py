@@ -25,30 +25,41 @@ text_input = st.text_area(
     placeholder="例如：这是人类历史上最伟大的一天。所有人都在注视着天空，等待着那个声音的降临..."
 )
 
+# 新增文件上传组件
+uploaded_audio = st.file_uploader(
+    "🎤 上传参考音频以克隆音色。建议：3-10秒，无背景音乐的清晰人声 (.wav 或 .mp3)",
+    type=["wav", "mp3"]
+)
+
 # 4. 核心交互按钮
 # use_container_width=True 会让按钮变得宽大醒目
 if st.button("🚀 启动自动化生成流水线", type="primary", use_container_width=True):
-
-    # 基础校验：防止用户乱点
     if not text_input.strip():
         st.warning("⚠️ 请先输入一点文本内容哦！")
     else:
         # 5. 调用后端 API 进行处理
         # st.spinner 会在界面上展示一个优雅的转圈等待动画
-        with st.spinner("AI 引擎疯狂运转中，请确保您的后端 FastAPI 服务已开启..."):
+        with st.spinner("AI 引擎疯狂运转中（若使用音色克隆，耗时会稍微增加）..."):
             try:
                 start_time = time.time()
 
-                # 构建请求体，匹配我们后端定义的 Pydantic Schema
-                payload = {"text": text_input, "voice_preset": "default"}
+                # 修改：构建表单数据 (Form Data) 和文件数据 (Files)
+                form_data = {"text": text_input}
+                files_data = {}
 
-                # 发送 POST 网络请求给后端
-                response = requests.post(API_GENERATE_URL, json=payload)
+                # 如果用户上传了文件，我们就把它按 requests 库的要求打包
+                if uploaded_audio is not None:
+                    files_data["prompt_audio"] = (
+                        uploaded_audio.name,
+                        uploaded_audio.getvalue(),
+                        uploaded_audio.type
+                    )
 
-                # 如果 HTTP 状态码是 200，说明网络请求成功
+                # 发送 POST 请求时，使用 data= 和 files= ，而不是 json=
+                response = requests.post(API_GENERATE_URL, data=form_data, files=files_data)
+
                 if response.status_code == 200:
                     result = response.json()
-
                     if result.get("success"):
                         end_time = time.time()
                         st.success(f"🎉 {result.get('message')} (总耗时: {end_time - start_time:.2f} 秒)")
