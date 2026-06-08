@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.vscode/
+.idea/
+# Virtual environments
+.venv
+
+*.wav
+*.pth
+*.safetensors
+*.log
+*.tmp
